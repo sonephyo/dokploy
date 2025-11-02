@@ -179,10 +179,19 @@ export default async function handler(
 		}
 
 		try {
+
+			const titleLog =
+				req.query?.titleLog as string ||
+				deploymentTitle;
+
+			const descriptionLog =
+				req.query?.descriptionLog as string ||
+				`Hash: ${deploymentHash}`;
+
 			const jobData: DeploymentJob = {
 				applicationId: application.applicationId as string,
-				titleLog: deploymentTitle,
-				descriptionLog: `Hash: ${deploymentHash}`,
+				titleLog: titleLog,
+				descriptionLog: descriptionLog,
 				type: "deploy",
 				applicationType: "application",
 				server: !!application.serverId,

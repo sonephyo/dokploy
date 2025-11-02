@@ -568,3 +568,13 @@ export const apiUpdateApplication = createSchema
 		applicationId: z.string().min(1),
 	})
 	.omit({ serverId: true });
+
+export const apiDeployApplication = createSchema
+	.pick({
+		applicationId: true,
+	})
+	.required()
+	.extend({
+		titleLog: z.string().optional(),
+		descriptionLog: z.string().optional(),
+	});

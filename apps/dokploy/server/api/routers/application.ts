@@ -6,6 +6,7 @@ import {
 import { db } from "@/server/db";
 import {
 	apiCreateApplication,
+	apiDeployApplication,
 	apiFindMonitoringStats,
 	apiFindOneApplication,
 	apiReloadApplication,
@@ -298,7 +299,7 @@ export const applicationRouter = createTRPCRouter({
 		}),
 
 	redeploy: protectedProcedure
-		.input(apiFindOneApplication)
+		.input(apiDeployApplication)
 		.mutation(async ({ input, ctx }) => {
 			const application = await findApplicationById(input.applicationId);
 			if (
@@ -311,8 +312,8 @@ export const applicationRouter = createTRPCRouter({
 			}
 			const jobData: DeploymentJob = {
 				applicationId: input.applicationId,
-				titleLog: "Rebuild deployment",
-				descriptionLog: "",
+				titleLog: input.titleLog || "Rebuild deployment",
+				descriptionLog: input.descriptionLog || "",
 				type: "redeploy",
 				applicationType: "application",
 				server: !!application.serverId,
@@ -648,7 +649,7 @@ export const applicationRouter = createTRPCRouter({
 			return true;
 		}),
 	deploy: protectedProcedure
-		.input(apiFindOneApplication)
+		.input(apiDeployApplication)
 		.mutation(async ({ input, ctx }) => {
 			const application = await findApplicationById(input.applicationId);
 			if (
@@ -661,8 +662,8 @@ export const applicationRouter = createTRPCRouter({
 			}
 			const jobData: DeploymentJob = {
 				applicationId: input.applicationId,
-				titleLog: "Manual deployment",
-				descriptionLog: "",
+				titleLog: input.titleLog || "Manual deployment",
+				descriptionLog: input.descriptionLog || "",
 				type: "deploy",
 				applicationType: "application",
 				server: !!application.serverId,
