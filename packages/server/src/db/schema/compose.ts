@@ -204,3 +204,10 @@ export const apiRandomizeCompose = createSchema
 		suffix: z.string().optional(),
 		composeId: z.string().min(1),
 	});
+
+export const apiDeployCompose = z.object({
+	composeId: z.string().min(1),
+	titleLog: z.string().optional(),
+	descriptionLog: z.string().optional(),
+})
+	
