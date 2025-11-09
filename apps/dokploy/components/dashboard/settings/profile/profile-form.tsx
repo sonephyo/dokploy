@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { generateSHA256Hash } from "@/lib/utils";
 import { api } from "@/utils/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, User } from "lucide-react";
+import { Loader2, Plus, User } from "lucide-react";
 import { useTranslation } from "next-i18next";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -56,10 +56,71 @@ const randomImages = [
 	"/avatars/avatar-12.png",
 ];
 
+
 export const ProfileForm = () => {
 	const _utils = api.useUtils();
 	const { data, refetch, isLoading } = api.user.get.useQuery();
 	const { data: isCloud } = api.settings.isCloud.useQuery();
+
+	const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+	const [isUploading, setIsUploading] = useState(false);
+
+	const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		if (!file) {
+			event.target.value = ""; // Reset input
+			return;
+		}
+
+		// Validate file size (2MB) - do this FIRST
+		if (file.size > 2 * 1024 * 1024) {
+			toast.error("Image size must be less than 2MB");
+			event.target.value = ""; // Reset input
+			return;
+		}
+
+		// Validate file type - check MIME type or file extension
+		const isValidImageType = file.type.startsWith('image/') ||
+			/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+
+		if (!isValidImageType) {
+			toast.error("Please upload a valid image file (JPG, PNG, GIF, etc.)");
+			event.target.value = ""; // Reset input
+			return;
+		}
+
+		setIsUploading(true);
+
+		// Convert to base64 or upload to server
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			try {
+				const base64String = reader.result as string;
+				if (!base64String || typeof base64String !== 'string') {
+					throw new Error("Failed to read image");
+				}
+				// Set both state and form value immediately
+				setUploadedImage(base64String);
+				form.setValue('image', base64String, { shouldValidate: false });
+				toast.success("Image uploaded successfully");
+			} catch (error) {
+				console.error("Error processing image:", error);
+				toast.error("Error processing image file");
+				setUploadedImage(null);
+			} finally {
+				setIsUploading(false);
+				event.target.value = ""; // Reset input to allow uploading again
+			}
+		};
+		reader.onerror = (error) => {
+			console.error("FileReader error:", error);
+			toast.error("Error reading image file");
+			setIsUploading(false);
+			setUploadedImage(null);
+			event.target.value = ""; // Reset input
+		};
+		reader.readAsDataURL(file);
+	};
 
 	const {
 		mutateAsync,
@@ -71,11 +132,15 @@ export const ProfileForm = () => {
 	const [gravatarHash, setGravatarHash] = useState<string | null>(null);
 
 	const availableAvatars = useMemo(() => {
-		if (gravatarHash === null) return randomImages;
-		return randomImages.concat([
-			`https://www.gravatar.com/avatar/${gravatarHash}`,
-		]);
-	}, [gravatarHash]);
+		const avatars = gravatarHash === null
+			? randomImages
+			: randomImages.concat([`https://www.gravatar.com/avatar/${gravatarHash}`]);
+
+		if (uploadedImage) {
+			return avatars.concat([uploadedImage]);
+		}
+		return avatars;
+	}, [gravatarHash, uploadedImage]);
 
 	const form = useForm<Profile>({
 		defaultValues: {
@@ -90,11 +155,21 @@ export const ProfileForm = () => {
 
 	useEffect(() => {
 		if (data) {
+			const currentImage = data?.user?.image || "";
+
+			// Check if the current image is a custom upload (base64 or not in predefined list)
+			if (currentImage && !randomImages.includes(currentImage) && !currentImage.includes('gravatar.com')) {
+				setUploadedImage(currentImage);
+			} else {
+				// Clear uploaded image if current image is a predefined avatar or gravatar
+				setUploadedImage(null);
+			}
+
 			form.reset(
 				{
 					email: data?.user?.email || "",
 					password: form.getValues("password") || "",
-					image: data?.user?.image || "",
+					image: currentImage,
 					currentPassword: form.getValues("currentPassword") || "",
 					allowImpersonation: data?.user?.allowImpersonation,
 				},
@@ -239,25 +314,85 @@ export const ProfileForm = () => {
 																value={field.value}
 																className="flex flex-row flex-wrap gap-2 max-xl:justify-center"
 															>
-																{availableAvatars.map((image) => (
-																	<FormItem key={image}>
-																		<FormLabel className="[&:has([data-state=checked])>img]:border-primary [&:has([data-state=checked])>img]:border-1 [&:has([data-state=checked])>img]:p-px cursor-pointer">
+																{/* Predefined avatars */}
+																{randomImages.map((avatar) => (
+																	<FormItem key={avatar}>
+																		<FormLabel className="[&:has([data-state=checked])>div]:border-primary [&:has([data-state=checked])>div]:border-2 cursor-pointer">
 																			<FormControl>
 																				<RadioGroupItem
-																					value={image}
+																					value={avatar}
 																					className="sr-only"
 																				/>
 																			</FormControl>
-
-																			<img
-																				key={image}
-																				src={image}
-																				alt="avatar"
-																				className="h-12 w-12 rounded-full border hover:p-px hover:border-primary transition-transform"
-																			/>
+																			<div className="h-12 w-12 rounded-full border hover:border-primary transition-transform overflow-hidden">
+																				<img
+																					src={avatar}
+																					alt={`avatar ${avatar}`}
+																					className="h-full w-full object-cover"
+																				/>
+																			</div>
 																		</FormLabel>
 																	</FormItem>
 																))}
+
+																{/* Gravatar option */}
+																{gravatarHash && (
+																	<FormItem key="gravatar">
+																		<FormLabel className="[&:has([data-state=checked])>div]:border-primary [&:has([data-state=checked])>div]:border-2 cursor-pointer">
+																			<FormControl>
+																				<RadioGroupItem
+																					value={`https://www.gravatar.com/avatar/${gravatarHash}`}
+																					className="sr-only"
+																				/>
+																			</FormControl>
+																			<div className="h-12 w-12 rounded-full border hover:border-primary transition-transform overflow-hidden">
+																				<img
+																					src={`https://www.gravatar.com/avatar/${gravatarHash}`}
+																					alt="gravatar"
+																					className="h-full w-full object-cover"
+																				/>
+																			</div>
+																		</FormLabel>
+																	</FormItem>
+																)}
+
+																{/* Upload button - shows uploaded image when present, + icon otherwise */}
+																<FormItem key={"avatar-upload"}>
+																	<FormLabel className={(uploadedImage || (field.value && !randomImages.includes(field.value) && !field.value.includes('gravatar.com'))) ? "[&:has([data-state=checked])>div]:border-primary [&:has([data-state=checked])>div]:border-2 cursor-pointer" : "cursor-pointer"}>
+																		<FormControl>
+																			<>
+																				{(uploadedImage || (field.value && !randomImages.includes(field.value) && !field.value.includes('gravatar.com'))) && (
+																					<RadioGroupItem
+																						value={uploadedImage || field.value}
+																						className="sr-only"
+																					/>
+																				)}
+																				<input
+																					type="file"
+																					accept="image/*"
+																					onChange={handleImageUpload}
+																					className="sr-only"
+																					id="avatar-upload-input"
+																				/>
+																			</>
+																		</FormControl>
+																		<label htmlFor="avatar-upload-input">
+																			<div className="h-12 w-12 rounded-full border hover:border-primary transition-transform flex items-center justify-center bg-muted overflow-hidden">
+																				{isUploading ? (
+																					<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+																				) : (uploadedImage || (field.value && !randomImages.includes(field.value) && !field.value.includes('gravatar.com'))) ? (
+																					<img
+																						src={uploadedImage || field.value}
+																						alt="uploaded avatar"
+																						className="h-full w-full rounded-full object-cover"
+																					/>
+																				) : (
+																					<Plus className="h-6 w-6 text-muted-foreground" />
+																				)}
+																			</div>
+																		</label>
+																	</FormLabel>
+																</FormItem>
 															</RadioGroup>
 														</FormControl>
 														<FormMessage />
